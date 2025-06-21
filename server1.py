@@ -8,9 +8,7 @@ from flask_socketio import SocketIO, emit
 
 # --- Configuración de Flask ---
 app = Flask(__name__)
-# Configuración para Flask-SocketIO
-# Permite conexiones desde cualquier origen (*) para desarrollo.
-# En producción, considera especificar dominios específicos por seguridad.
+
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Estado Compartido del Servidor ---
@@ -115,8 +113,6 @@ if __name__ == '__main__':
     # Obtener el puerto de las variables de entorno (fundamental para despliegue en la nube, ej. Heroku).
     # Si la variable PORT no está definida (como en desarrollo local), usa el puerto 5000.
     port = int(os.environ.get("PORT", 5000))
-
-    # Para que Flask/SocketIO sea accesible desde otras máquinas y en Heroku, usa host='0.0.0.0'.
     # Usamos socketio.run() en lugar de app.run() porque estamos usando Flask-SocketIO.
     print(f"Servidor SocketIO iniciado en http://0.0.0.0:{port}")
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
