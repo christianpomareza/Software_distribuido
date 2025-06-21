@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliente Web Distribuido (Socket.IO)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        /* Estilos Generales y Reseteo Básico */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0; /* Eliminar margen predeterminado del body */
+            padding: 1rem; /* Añadir padding para que el contenido no pegue a los bordes */
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+            font-size: 16px; /* Tamaño de fuente base */
+        }
+        .container {
+            max-width: 800px; /* Ancho máximo para pantallas grandes */
+            margin: auto; /* Centrar el contenedor */
+            background: white;
+            padding: 1.5rem; /* Relleno con unidades relativas */
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* Espaciado entre secciones */
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.8rem; /* Tamaño de fuente responsivo */
+        }
+        h2 {
+            font-size: 1.4rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+
+        /* Controles de Conexión y Mensajes */
+        .connection-controls, .message-controls {
+            display: flex;
+            flex-wrap: wrap; /* Permitir que los elementos salten de línea en pantallas pequeñas */
+            gap: 0.5rem; /* Espaciado más compacto */
+            align-items: center;
+        }
+        .connection-controls label {
+            flex-basis: 100%; /* La etiqueta ocupa todo el ancho en móviles */
+            font-weight: bold;
+        }
+        .connection-controls input[type="text"] {
+            flex-grow: 1;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            min-width: 150px; /* Asegura un ancho mínimo para el input */
+        }
+        .connection-controls button, .message-controls button {
+            padding: 0.6rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            white-space: nowrap; /* Evita que el texto de los botones se rompa */
+        }
+        .connection-controls button.connect { background-color: #28a745; color: white; }
+        .connection-controls button.disconnect { background-color: #dc3545; color: white; }
+        .connection-controls button:disabled, .message-controls button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* Área de Chat */
+        #chat-display {
+            border: 1px solid #ccc;
+            height: 250px; /* Altura fija para el chat */
+            overflow-y: auto; /* Scroll si el contenido excede la altura */
+            padding: 0.8rem;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+            white-space: pre-wrap; /* Preservar saltos de línea y espacios */
+            word-wrap: break-word; /* Ajustar texto largo */
+            font-size: 0.9rem; /* Un poco más pequeño para el chat */
+            box-sizing: border-box; /* Incluir padding y border en la altura/ancho */
+            width: 100%;
+            resize: vertical; /* Permitir redimensionar verticalmente */
+        }
+
+        /* Entrada de Mensajes */
+        .message-controls input[type="text"] {
+            flex-grow: 1;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            min-width: 100px; /* Ancho mínimo para el input de mensaje */
+        }
+        .message-controls button { background-color: #007bff; color: white; }
+
+        /* Lista de Ítems */
+        #items-list-display {
+            border: 1px solid #ccc;
+            padding: 0.8rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        #items-list-display ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        #items-list-display li {
+            background-color: #e2f0fb;
+            margin-bottom: 0.3rem; /* Espaciado más pequeño entre ítems */
+            padding: 0.4rem 0.6rem;
+            border-radius: 3px;
+            font-size: 0.95rem;
+        }
+
+        /* Media Queries para pantallas pequeñas (ej. celulares) */
+        @media (max-width: 600px) {
+            body {
+                font-size: 14px; /* Ajustar tamaño de fuente base para móviles */
+            }
+            .container {
+                padding: 1rem;
+                margin: 0.5rem; /* Margen más pequeño en los bordes */
+            }
+            h1 {
+                font-size: 1.6rem;
+            }
+            h2 {
+                font-size: 1.2rem;
+            }
+            .connection-controls, .message-controls {
+                flex-direction: column; /* Apilar elementos verticalmente */
+                align-items: stretch; /* Estirar elementos a lo ancho */
+                gap: 0.5rem;
+            }
+            .connection-controls input[type="text"],
+            .message-controls input[type="text"] {
+                width: auto; /* Dejar que flexbox maneje el ancho */
+                flex-grow: 1;
+            }
+            .connection-controls button, .message-controls button {
+                width: 100%; /* Botones ocupan todo el ancho */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cliente de Sistema Distribuido</h1>
+
+        <div class="connection-controls">
+            <label for="server-url-input">URL del Servidor:</label>
+            <input type="text" id="server-url-input" value="http://127.0.0.1:5000">
+            <button id="connect-button" class="connect">Conectar</button>
+            <button id="disconnect-button" class="disconnect">Desconectar</button>
+        </div>
+
+        <textarea id="chat-display" rows="15" readonly></textarea>
+
+        <div class="message-controls">
+            <input type="text" id="message-input" placeholder="Escribe tu comando (ej: agregar leche) o mensaje...">
+            <button id="send-button">Enviar</button>
+        </div>
+
+        <div id="items-list-display">
+            <h2>Ítems Actuales:</h2>
+            <ul id="current-items-ul">
+                <li>No hay ítems</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let socket;
+        const chatDisplay = document.getElementById('chat-display');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const connectButton = document.getElementById('connect-button');
+        const disconnectButton = document.getElementById('disconnect-button');
+        const serverUrlInput = document.getElementById('server-url-input');
+        const currentItemsUl = document.getElementById('current-items-ul');
+
+        // Función para escribir en el área de chat
+        function writeToChat(text) {
+            chatDisplay.value += text + '\\n';
+            chatDisplay.scrollTop = chatDisplay.scrollHeight; // Scroll automático al final
+        }
+
+        // Función para actualizar el estado de la UI (botones, campos)
+        function updateUIState(isConnected) {
+            connectButton.disabled = isConnected;
+            disconnectButton.disabled = !isConnected;
+            serverUrlInput.disabled = isConnected;
+            messageInput.disabled = !isConnected;
+            sendButton.disabled = !isConnected;
+        }
+
+        // Función para actualizar la lista de ítems visible en la UI
+        function updateItemsList(items) {
+            currentItemsUl.innerHTML = ''; // Limpiar lista actual
+            if (items && items.length > 0) {
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    currentItemsUl.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = 'No hay ítems';
+                currentItemsUl.appendChild(li);
+            }
+        }
+
+        // --- Funciones de Conexión/Desconexión y Envío de Mensajes ---
+        function connectToServer() {
+            if (socket && socket.connected) {
+                writeToChat("Ya estás conectado al servidor.");
+                return;
+            }
+
+            const serverUrl = serverUrlInput.value.trim();
+            if (!serverUrl) {
+                alert("Por favor, introduce la URL del servidor.");
+                return;
+            }
+
+            writeToChat(`[Cliente Web] Intentando conectar a: ${serverUrl}`);
+            try {
+                // Inicializar la conexión Socket.IO
+                socket = io(serverUrl);
+
+                // --- Manejadores de Eventos de Socket.IO ---
+                socket.on('connect', () => {
+                    writeToChat('Conectado al servidor Socket.IO desde el navegador!');
+                    updateUIState(true);
+                    // Emitir un evento para que el servidor sepa que un nuevo cliente está listo
+                    socket.emit('client_ready', { id: 'web_client_celular' });
+                });
+
+                socket.on('disconnect', () => {
+                    writeToChat('Desconectado del servidor Socket.IO.');
+                    updateUIState(false);
+                    updateItemsList([]); // Limpiar la lista al desconectar
+                });
+
+                socket.on('connect_error', (error) => {
+                    writeToChat(`Error de conexión a Socket.IO: ${error.message}`);
+                    updateUIState(false);
+                    // Quita la instancia de socket para permitir un nuevo intento de conexión
+                    socket = null;
+                });
+
+                // Cuando el servidor te envía un mensaje 'receive_message' (respuesta a un comando)
+                socket.on('receive_message', (data) => {
+                    // Asegúrate de acceder a las propiedades correctamente (ej. data.response)
+                    const response = data.response || 'Mensaje vacío';
+                    const items = data.items || [];
+                    writeToChat(`--> [Servidor]: ${response}`);
+                    updateItemsList(items); // Actualiza la lista de ítems en la UI
+                });
+
+                // Cuando el servidor envía una actualización global de ítems (broadcast)
+                socket.on('update_items', (data) => {
+                    const items = data.items || [];
+                    writeToChat(`    [ACTUALIZACIÓN GLOBAL DE ITEMS]: ${items}`);
+                    updateItemsList(items); // Actualiza la lista de ítems en la UI
+                });
+
+            } catch (error) {
+                writeToChat(`[Cliente Web] Error al intentar conectar: ${error.message}`);
+                updateUIState(false);
+            }
+        }
+
+        function disconnectFromServer() {
+            if (socket && socket.connected) {
+                socket.disconnect();
+            } else {
+                writeToChat("No estás conectado al servidor.");
+            }
+            updateUIState(false);
+            updateItemsList([]);
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            writeToChat(`[Cliente Web]: ${message}`);
+            messageInput.value = '';
+
+            if (socket && socket.connected) {
+                socket.emit('send_message', { message: message }); // Emite el evento 'send_message'
+            } else {
+                writeToChat("No conectado al servidor. Por favor, conéctate primero.");
+            }
+        }
+
+        // Event Listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        connectButton.addEventListener('click', connectToServer);
+        disconnectButton.addEventListener('click', disconnectFromServer);
+
+        // Inicializar estado de UI
+        updateUIState(false);
+        updateItemsList([]); // Inicializar lista de ítems vacía
+    </script>
+</body>
+</html>
